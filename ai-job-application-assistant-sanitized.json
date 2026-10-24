@@ -1,0 +1,2021 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "e7c0d066-564c-4cf4-b0cb-e461fa35ecf3",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -16,
+        16
+      ],
+      "webhookId": "c0cf6ba4-b195-4355-9324-072b346ebbf0"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9f174b5e-ee70-4bd2-b46d-013a543b921e",
+              "leftValue": "={{ $json.message.from.id }}",
+              "rightValue": 1234567890,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f0acc3fc-4fb7-42b6-bbc2-17760b5f8755",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        208,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nlet jdText = \"\";\nlet source = \"unknown\";\nif (input.message && input.message.text) {\n  jdText = input.message.text.trim();\n  source = \"telegram\";\n} else if (input.body && input.body.jd_text) {\n  jdText = input.body.jd_text;\n  source = \"webhook\";\n} else if (input.timestamp) {\n  jdText = input.jd_text || \"Placeholder JD for scheduled scan\";\n  source = \"cron\";\n}\nreturn [{ json: { jd_text: jdText, source: source, received_at: new Date().toISOString() } }];"
+      },
+      "id": "e51ab617-e52b-4699-a6fa-375da2246c19",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "url-check-001",
+              "leftValue": "={{ $json.jd_text }}",
+              "rightValue": "http",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4f55f446-a414-487b-ad24-8f11c93e3ee8",
+      "name": "If Is URL",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -16,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.jd_text }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "3b2c311b-3d17-4544-9ada-9dd314792b05",
+      "name": "Fetch JD URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = typeof $json.data === \"string\" ? $json.data : JSON.stringify($json.data || \"\");\nlet text = \"\";\nlet inTag = false;\nfor (let i = 0; i < raw.length; i++) {\n  if (raw[i] === \"<\") { inTag = true; continue; }\n  if (raw[i] === \">\") { inTag = false; continue; }\n  if (!inTag) text += raw[i];\n}\ntext = text.replace(/\\s+/g, \" \").trim().slice(0, 8000);\nconst src = $(\"Code in JavaScript\").item.json.source;\nconst ts = $(\"Code in JavaScript\").item.json.received_at;\nreturn [{ json: { jd_text: text, source: src, received_at: ts } }];"
+      },
+      "id": "85d7e66a-b27d-4eed-a621-28c528cd7fa8",
+      "name": "Strip HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expert ATS parser. Analyze the job description below and extract structured requirements.\n\nJob Description:\n{{ $json.jd_text }}\n\nReturn ONLY valid JSON — no markdown, no preamble:\n{\n  \"company\": \"company name or 'Unknown Company'\",\n  \"role_title\": \"job title\",\n  \"seniority\": \"Junior/Mid/Senior/Entry-level\",\n  \"required_skills\": [],\n  \"required_tools\": [],\n  \"ats_keywords\": [],\n  \"location\": \"Remote/Hybrid/city\",\n  \"raw_summary\": \"one sentence\"\n}",
+        "batching": {}
+      },
+      "id": "4057712a-8922-4ebc-bbf3-66a55fb562fa",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        656,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "f1162113-08aa-45e6-bd4f-fe90b1db4329",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        592,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.text || \"\";\nconst start = raw.indexOf(\"{\");\nconst end = raw.lastIndexOf(\"}\");\nif (start === -1 || end === -1) throw new Error(\"No JSON found: \" + raw.slice(0, 100));\nreturn [{ json: JSON.parse(raw.slice(start, end + 1)) }];"
+      },
+      "id": "254c52a6-6887-4a6d-9fed-b866f15baf34",
+      "name": "Code in JavaScript1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2b45aad1",
+              "name": "resume_text",
+              "value": "SAMPLE CANDIDATE | Location: Sample City | Email: candidate@example.com | LinkedIn: linkedin.com/in/sample-candidate | GitHub: github.com/sample-candidate --- PROFILE: Entry-level software developer with experience in Python and API integration. --- SKILLS: Python, JavaScript, REST APIs, SQL, Git, Docker --- EDUCATION: B.Tech in Computer Science, Sample University, Graduation: 2026 --- EXPERIENCE: Software Intern at Example Company; assisted with Python automation and debugging. --- PROJECTS: Job Application Assistant (n8n, LLM API, Telegram, Google Sheets) — sample workflow for job description analysis and interview preparation. --- CERTIFICATIONS: Sample SQL Certificate",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ffe41142-2cbe-4f7b-b95c-1375a7ddc009",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1248,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Compare this resume against the job requirements and return an ATS evaluation.\n\n## Candidate Resume\n{{$json.resume_text}}\n\n## Parsed Job Requirements\n{{$json.parsed_jd}}\n\nReturn ONLY valid JSON — no markdown, no code fences:\n{\n  \"total_score\": 0,\n  \"skills_score\": 0,\n  \"experience_score\": 0,\n  \"tools_score\": 0,\n  \"matched_keywords\": [],\n  \"missing_keywords\": [],\n  \"gap_summary\": \"\"\n}",
+        "batching": {}
+      },
+      "id": "102dc96a-a0bb-46bd-b038-a03482f656a3",
+      "name": "Basic LLM Chain1",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1472,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "75d1979c-2898-4293-ab06-c345a5d6c193",
+      "name": "Groq Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.text || \"\";\nconst start = raw.indexOf(\"{\");\nconst end = raw.lastIndexOf(\"}\");\nif (start === -1 || end === -1) throw new Error(\"No JSON found: \" + raw.slice(0, 100));\nreturn [{ json: JSON.parse(raw.slice(start, end + 1)) }];"
+      },
+      "id": "6b140971-1f82-44f2-9bf7-1704dc7ad67a",
+      "name": "Code in JavaScript2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "19fca2bb",
+              "name": "project_list_text",
+              "value": "# MASTER PROJECTS --- # 1. SprintFlow — AI-Powered Agile Project Management Platform | Role: AI Engineer & Python Backend Developer | Tech Stack: Python, FastAPI, PostgreSQL, SQLAlchemy, Alembic, Pydantic, Uvicorn | Features Implemented: Modular FastAPI backend, root API endpoint, health-check endpoint, Swagger documentation, environment configuration, PostgreSQL setup, SQLAlchemy integration, Alembic migrations | Planned Features: JWT authentication, role-based access control, workspace management, sprint management, task assignment, AI-generated user stories, AI-generated acceptance criteria, sprint summarization, risk detection, natural-language search | Resume Summary: Developing an AI-powered agile project-management platform using FastAPI, PostgreSQL, SQLAlchemy, and Alembic with planned AI features including user-story generation, sprint summarization, risk detection, and natural-language search. --- # 2. MeetingPrep AI — AI-Based Meeting Preparation Generator | Role: Full-Stack Developer & AI Engineer | Frontend: Next.js 16, React 19, TypeScript | Backend: Node.js, Express.js, TypeScript, Zod, JWT, Argon2id, Helmet, CSRF protection | Database: MongoDB, Mongoose | AI: Google Gemini API, Google GenAI SDK, Prompt Engineering | Features: User registration, login/logout, JWT authentication, HttpOnly cookies, Argon2id hashing, CSRF protection, rate limiting, multi-step meeting wizard, company/agenda/attendee collection, AI document generation (executive summaries, talking points, discovery questions, objection handling, follow-up actions), dashboard, editing, version history, approval workflow, PDF export, Markdown export, AES-256-GCM encryption, user-level document isolation | GitHub: [PUBLIC_REPOSITORY_URL] | Resume Summary: Built a full-stack AI meeting-preparation platform using Next.js, Express, MongoDB, and Gemini. Implemented secure authentication, encrypted storage, AI document generation, approval workflows, version history, and PDF/Markdown exports. --- # Core Skills Demonstrated: Python, FastAPI, Node.js, Express.js, Next.js, React, PostgreSQL, MongoDB, SQLAlchemy, Docker, REST APIs, JWT, Authentication, Authorization, Prompt Engineering, Gemini API, System Design, Database Design, Encryption, API Security, Git, GitHub",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "52db0420-8643-4dda-aa55-1ee430754108",
+      "name": "Edit Fields1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2064,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a professional resume optimizer.\n\nSTRICT HALLUCINATION RULES:\n- ONLY use information that exists in the MASTER PROJECT LIST.\n- NEVER invent projects, tools, technologies, or outcomes.\n- If a keyword is unsupported, place it under unaddressable_gaps.\n- Return ONLY valid JSON. No markdown, no code fences.\n\nMASTER PROJECT LIST:\n{{$json.project_list_text}}\n\nMISSING KEYWORDS:\n{{$json.missing_keywords}}\n\nReturn exactly this JSON:\n{\n  \"drafted_bullets\": [{ \"keyword_addressed\": \"\", \"bullet_options\": [\"\", \"\"], \"source_project\": \"\" }],\n  \"unaddressable_gaps\": []\n}",
+        "batching": {}
+      },
+      "id": "0d37ccc9-fa18-413b-abdb-f58823576989",
+      "name": "Basic LLM Chain2",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2288,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "cb5823fe-9c3c-41d2-a12f-de78b472c35a",
+      "name": "Groq Chat Model2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.text || \"\";\nconst start = raw.indexOf(\"{\");\nconst end = raw.lastIndexOf(\"}\");\nif (start === -1 || end === -1) throw new Error(\"No JSON found: \" + raw.slice(0, 100));\nreturn [{ json: JSON.parse(raw.slice(start, end + 1)) }];"
+      },
+      "id": "a1dad904-298f-4051-ad21-647dfa31ff10",
+      "name": "Code in JavaScript3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2656,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a36ad6f8",
+              "name": "Format Telegram Message",
+              "value": "=🎯 *New Job Opportunity Analyzed*\n\n*Role:* {{ $('Code in JavaScript1').item.json.role_title }}\n*Company:* {{ $('Code in JavaScript1').item.json.company }}\n\n📊 *ATS Match Score:* {{ $('Code in JavaScript2').item.json.total_score }}%\n• Skills Score: {{ $('Code in JavaScript2').item.json.skills_score }}%\n• Experience Score: {{ $('Code in JavaScript2').item.json.experience_score }}%\n• Tools Score: {{ $('Code in JavaScript2').item.json.tools_score }}%\n\n✏️ *Proposed Resume Improvements:*\n{{ JSON.stringify($('Code in JavaScript3').item.json.drafted_bullets, null, 2) }}\n\n⚠️ *Unaddressable Gaps:*\n{{ JSON.stringify($('Code in JavaScript3').item.json.unaddressable_gaps, null, 2) }}\n\n────────────────────\n\nReply with:\n✅ approve\n❌ reject\n💬 or send feedback to revise the bullets",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d8409803-b04b-4059-a092-e4923492cb63",
+      "name": "Edit Fields2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2880,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json['Format Telegram Message'] }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "f609d487-51f7-4532-a310-45a659afe508",
+      "name": "Send a text message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3104,
+        -80
+      ],
+      "webhookId": "8a93b324-ba2f-481f-9b7f-5e507c37dc95"
+    },
+    {
+      "parameters": {},
+      "id": "23edc6cd-7945-4f4b-9105-38ef7c3a6bda",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3328,
+        -80
+      ],
+      "webhookId": "b354467a-472c-4872-8d31-ed96f36cd73b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "approve-if1",
+              "leftValue": "={{ $json.message.text.toLowerCase() }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "61b297c4-8076-4a2a-a125-d5ea106f92e0",
+      "name": "If1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3552,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "packet-001",
+              "name": "final_packet_text",
+              "value": "=APPLICATION PACKET — {{ $('Code in JavaScript1').item.json.role_title }} at {{ $('Code in JavaScript1').item.json.company }}\nLocation: {{ $('Code in JavaScript1').item.json.location }} | Seniority: {{ $('Code in JavaScript1').item.json.seniority }}\nATS Score: {{ $('Code in JavaScript2').item.json.total_score }}%\n\nAPPROVED RESUME IMPROVEMENTS:\n{{ JSON.stringify($('Code in JavaScript3').item.json.drafted_bullets, null, 2) }}\n\nUNADDRESSABLE GAPS:\n{{ JSON.stringify($('Code in JavaScript3').item.json.unaddressable_gaps, null, 2) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f6e2276e-1906-40ff-9b80-a7de5f0a05ac",
+      "name": "Set Packet",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        3744,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "Packet logged to Career Command Center. Generating interview prep now — this takes a few seconds...",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "f354cd6b-a60e-4d7a-a2d2-81ca23a7be55",
+      "name": "Send Packet Ready",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3968,
+        -176
+      ],
+      "webhookId": "e6461f18-9b68-409e-8274-4e5c9ece4d23"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_DOCUMENT_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $now }}",
+            "company": "={{ $('Code in JavaScript1').item.json.company }}",
+            "role": "={{ $('Code in JavaScript1').item.json.role_title }}",
+            "jd_source": "={{ $('Code in JavaScript').item.json.source }}",
+            "match_score": "={{ $('Code in JavaScript2').item.json.total_score }}",
+            "skills_score": "={{ $('Code in JavaScript2').item.json.skills_score }}",
+            "experience_score": "={{ $('Code in JavaScript2').item.json.experience_score }}",
+            "tools_score": "={{ $('Code in JavaScript2').item.json.tools_score }}",
+            "resume_variant_link": "",
+            "notes": "={{ $('Code in JavaScript2').item.json.gap_summary }}",
+            "status": "packet ready"
+          },
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "jd_source",
+              "displayName": "jd_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "match_score",
+              "displayName": "match_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "skills_score",
+              "displayName": "skills_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "experience_score",
+              "displayName": "experience_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "tools_score",
+              "displayName": "tools_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "resume_variant_link",
+              "displayName": "resume_variant_link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "39a98178-2f89-4738-a30c-6aff59a8b42b",
+      "name": "Log Approved",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4192,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Generate interview prep for this role, grounded ONLY in the candidate's real project experience. Do not invent projects or outcomes.\n\nROLE: {{ $('Code in JavaScript1').item.json.role_title }} at {{ $('Code in JavaScript1').item.json.company }}\nREQUIRED SKILLS: {{ JSON.stringify($('Code in JavaScript1').item.json.required_skills) }}\nCANDIDATE PROJECTS: {{ $('Edit Fields1').item.json.project_list_text }}\n\nReturn:\n1. 8-10 likely technical questions for this role\n2. 5 HR/behavioral questions\n3. For EACH behavioral question, a draft STAR answer using a real project — cite which project",
+        "batching": {}
+      },
+      "id": "72ab61a2-516f-41fc-837d-f3835c5f8ee4",
+      "name": "Basic LLM Chain3",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        4416,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "d8a93b00-6ca7-495d-97cf-a58f98ad4721",
+      "name": "Groq Chat Model3",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        4496,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.text || \"\";\nconst maxLen = 4000;\nconst items = [];\nlet start = 0;\nwhile (start < text.length) {\n  items.push({ json: { chunk: text.slice(start, start + maxLen) } });\n  start += maxLen;\n}\nreturn items.length > 0 ? items : [{ json: { chunk: \"(No interview prep generated)\" } }];"
+      },
+      "id": "6b9c9b0e-a8cf-4322-a374-e3ffede0f82f",
+      "name": "Chunk Interview Prep",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4768,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.chunk }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "4d0baa55-b3a0-490d-8e13-9c4f2fc88a96",
+      "name": "Send Interview Prep",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4992,
+        -176
+      ],
+      "webhookId": "99edd316-4ee5-4b4d-8b4f-79430414c0c4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "reject-if2",
+              "leftValue": "={{ $json.message.text.toLowerCase() }}",
+              "rightValue": "reject",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0317090a-967d-435a-9053-c5fca133c096",
+      "name": "If2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3728,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_DOCUMENT_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $now }}",
+            "company": "={{ $('Code in JavaScript1').item.json.company }}",
+            "role": "={{ $('Code in JavaScript1').item.json.role_title }}",
+            "jd_source": "={{ $('Code in JavaScript').item.json.source }}",
+            "match_score": "={{ $('Code in JavaScript2').item.json.total_score }}",
+            "skills_score": "={{ $('Code in JavaScript2').item.json.skills_score }}",
+            "experience_score": "={{ $('Code in JavaScript2').item.json.experience_score }}",
+            "tools_score": "={{ $('Code in JavaScript2').item.json.tools_score }}",
+            "resume_variant_link": "",
+            "notes": "={{ $('Code in JavaScript2').item.json.gap_summary }}",
+            "status": "rejected"
+          },
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "jd_source",
+              "displayName": "jd_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "match_score",
+              "displayName": "match_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "skills_score",
+              "displayName": "skills_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "experience_score",
+              "displayName": "experience_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "tools_score",
+              "displayName": "tools_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "resume_variant_link",
+              "displayName": "resume_variant_link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "30899163-7565-4626-a6ff-dd864a34f1f8",
+      "name": "Log Rejected",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3744,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "Got it — opportunity rejected and logged in your Career Command Center tracker.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "20bc0d6b-f174-406a-8d6d-6f6a01f69417",
+      "name": "Send Reject Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3968,
+        16
+      ],
+      "webhookId": "2e03ae2c-c778-44db-860b-eacca4b76512"
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $json.message && $json.message.text ? $json.message.text : ($json.text || \"Please revise\");\nreturn [{ json: { feedback_text: msg } }];"
+      },
+      "id": "63551077-9d83-42ac-a45f-1d474b8d8ff0",
+      "name": "Extract Feedback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3952,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a professional resume optimizer. The candidate provided feedback on the previously drafted bullets.\n\nPREVIOUS DRAFTED BULLETS:\n{{ JSON.stringify($('Code in JavaScript3').item.json.drafted_bullets, null, 2) }}\n\nCANDIDATE FEEDBACK:\n{{ $json.feedback_text }}\n\nMASTER PROJECT LIST:\n{{ $('Edit Fields1').item.json.project_list_text }}\n\nMISSING KEYWORDS:\n{{ JSON.stringify($('Code in JavaScript2').item.json.missing_keywords, null, 2) }}\n\nSTRICT RULES: ONLY use facts from the MASTER PROJECT LIST. NEVER invent. Return ONLY valid JSON.\n\n{\n  \"drafted_bullets\": [{ \"keyword_addressed\": \"\", \"bullet_options\": [\"\", \"\"], \"source_project\": \"\" }],\n  \"unaddressable_gaps\": []\n}",
+        "batching": {}
+      },
+      "id": "b0304ac4-bfab-4c5c-8436-b153ded0806a",
+      "name": "Revise Bullets LLM",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        4176,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "325cf34c-8a96-43e2-a837-2aea97467989",
+      "name": "Groq Chat Model4",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        4256,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.text || \"\";\nconst start = raw.indexOf(\"{\");\nconst end = raw.lastIndexOf(\"}\");\nif (start === -1 || end === -1) throw new Error(\"No JSON found: \" + raw.slice(0, 100));\nreturn [{ json: JSON.parse(raw.slice(start, end + 1)) }];"
+      },
+      "id": "e486b8b1-26ff-4c11-8b18-f74ec49d20b4",
+      "name": "Code Parse Revised",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4592,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "revised-001",
+              "name": "Revised Telegram Message",
+              "value": "=🔄 *Revised Analysis*\n\n*Role:* {{ $('Code in JavaScript1').item.json.role_title }}\n*Company:* {{ $('Code in JavaScript1').item.json.company }}\n\n📊 *ATS Match Score:* {{ $('Code in JavaScript2').item.json.total_score }}%\n• Skills Score: {{ $('Code in JavaScript2').item.json.skills_score }}%\n• Experience Score: {{ $('Code in JavaScript2').item.json.experience_score }}%\n• Tools Score: {{ $('Code in JavaScript2').item.json.tools_score }}%\n\n✏️ *Revised Resume Bullets:*\n{{ JSON.stringify($('Code Parse Revised').item.json.drafted_bullets, null, 2) }}\n\n⚠️ *Unaddressable Gaps:*\n{{ JSON.stringify($('Code Parse Revised').item.json.unaddressable_gaps, null, 2) }}\n\n────────────────────\n\nReply with:\n✅ approve\n❌ reject",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c77c2531-2f2a-485d-ba8a-2d097c62d071",
+      "name": "Format Revised Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        4880,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json['Revised Telegram Message'] }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ca5f9994-9a7e-445a-a2a7-c90c15617e19",
+      "name": "Send Revised Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        5104,
+        160
+      ],
+      "webhookId": "962ea1ee-03c9-41cd-b913-e5b81d50aef8"
+    },
+    {
+      "parameters": {},
+      "id": "052b91b0-1edb-4250-b678-426780d3a143",
+      "name": "Wait2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        5328,
+        160
+      ],
+      "webhookId": "b646ef8a-4641-4192-a10d-1a9a99714f4a"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "approve-if3",
+              "leftValue": "={{ $json.message.text.toLowerCase() }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e39d1d13-d4e9-4d9f-b0a0-15ea0415d9e2",
+      "name": "If3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5552,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "packet-r-001",
+              "name": "final_packet_text",
+              "value": "=APPLICATION PACKET (REVISED) — {{ $('Code in JavaScript1').item.json.role_title }} at {{ $('Code in JavaScript1').item.json.company }}\nLocation: {{ $('Code in JavaScript1').item.json.location }} | Seniority: {{ $('Code in JavaScript1').item.json.seniority }}\nATS Score: {{ $('Code in JavaScript2').item.json.total_score }}%\n\nAPPROVED RESUME IMPROVEMENTS (REVISED):\n{{ JSON.stringify($('Code Parse Revised').item.json.drafted_bullets, null, 2) }}\n\nUNADDRESSABLE GAPS:\n{{ JSON.stringify($('Code Parse Revised').item.json.unaddressable_gaps, null, 2) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9f440d08-7374-4319-837a-0882bcef49ec",
+      "name": "Set Packet Revised",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        5776,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "Revised packet logged. Generating interview prep now...",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "af120d48-c977-455e-919d-74688c01c0c1",
+      "name": "Send Packet Ready Revised",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6000,
+        -32
+      ],
+      "webhookId": "03833e5d-3675-4dfb-9647-397ac866715d"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_DOCUMENT_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $now }}",
+            "company": "={{ $('Code in JavaScript1').item.json.company }}",
+            "role": "={{ $('Code in JavaScript1').item.json.role_title }}",
+            "jd_source": "={{ $('Code in JavaScript').item.json.source }}",
+            "match_score": "={{ $('Code in JavaScript2').item.json.total_score }}",
+            "skills_score": "={{ $('Code in JavaScript2').item.json.skills_score }}",
+            "experience_score": "={{ $('Code in JavaScript2').item.json.experience_score }}",
+            "tools_score": "={{ $('Code in JavaScript2').item.json.tools_score }}",
+            "resume_variant_link": "",
+            "notes": "={{ $('Code in JavaScript2').item.json.gap_summary }}",
+            "status": "packet ready (revised)"
+          },
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "jd_source",
+              "displayName": "jd_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "match_score",
+              "displayName": "match_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "skills_score",
+              "displayName": "skills_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "experience_score",
+              "displayName": "experience_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "tools_score",
+              "displayName": "tools_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "resume_variant_link",
+              "displayName": "resume_variant_link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "87f5338a-023b-49a8-abde-da2b49c619d9",
+      "name": "Log Approved Revised",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        6224,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Generate interview prep for this role, grounded ONLY in the candidate's real project experience. Do not invent projects or outcomes.\n\nROLE: {{ $('Code in JavaScript1').item.json.role_title }} at {{ $('Code in JavaScript1').item.json.company }}\nREQUIRED SKILLS: {{ JSON.stringify($('Code in JavaScript1').item.json.required_skills) }}\nCANDIDATE PROJECTS: {{ $('Edit Fields1').item.json.project_list_text }}\n\nReturn:\n1. 8-10 likely technical questions for this role\n2. 5 HR/behavioral questions\n3. For EACH behavioral question, a draft STAR answer using a real project — cite which project",
+        "batching": {}
+      },
+      "id": "e77d993b-9fcc-4eb2-b8ba-cf3bf280a7c1",
+      "name": "LLM Interview2",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        6448,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "42d6e6f3-d8d5-49a8-9db6-cd440be51079",
+      "name": "Groq Chat Model5",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        6528,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.text || \"\";\nconst maxLen = 4000;\nconst items = [];\nlet start = 0;\nwhile (start < text.length) {\n  items.push({ json: { chunk: text.slice(start, start + maxLen) } });\n  start += maxLen;\n}\nreturn items.length > 0 ? items : [{ json: { chunk: \"(No interview prep generated)\" } }];"
+      },
+      "id": "a2a56fed-5f90-464f-90f5-23dd69722969",
+      "name": "Chunk Interview2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6800,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.chunk }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "8db62de2-72e1-4441-b83d-3f27aa02dbc1",
+      "name": "Send Interview2",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        7024,
+        -32
+      ],
+      "webhookId": "d2f510a2-b57d-4d1b-be37-b68386111727"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "reject-if4",
+              "leftValue": "={{ $json.message.text.toLowerCase() }}",
+              "rightValue": "reject",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d52fdee4-983e-4e15-a74f-f0a0230f359c",
+      "name": "If4",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5776,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_DOCUMENT_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $now }}",
+            "company": "={{ $('Code in JavaScript1').item.json.company }}",
+            "role": "={{ $('Code in JavaScript1').item.json.role_title }}",
+            "jd_source": "={{ $('Code in JavaScript').item.json.source }}",
+            "match_score": "={{ $('Code in JavaScript2').item.json.total_score }}",
+            "skills_score": "={{ $('Code in JavaScript2').item.json.skills_score }}",
+            "experience_score": "={{ $('Code in JavaScript2').item.json.experience_score }}",
+            "tools_score": "={{ $('Code in JavaScript2').item.json.tools_score }}",
+            "resume_variant_link": "",
+            "notes": "={{ $('Code in JavaScript2').item.json.gap_summary }}",
+            "status": "rejected (after revision)"
+          },
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "jd_source",
+              "displayName": "jd_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "match_score",
+              "displayName": "match_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "skills_score",
+              "displayName": "skills_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "experience_score",
+              "displayName": "experience_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "tools_score",
+              "displayName": "tools_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "resume_variant_link",
+              "displayName": "resume_variant_link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "49c08d6e-ea21-4957-af2f-c63c6a6c82d6",
+      "name": "Log Rejected2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        6000,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "Got it — opportunity rejected (after revision) and logged in your tracker.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "71488ff7-97bc-46ab-8e88-ae65ce15be56",
+      "name": "Send Reject Confirmation2",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6224,
+        160
+      ],
+      "webhookId": "2bc825f3-a32d-4016-9c34-474d8c1ea27c"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "Please reply with approve or reject. I can only accept one round of revision per job.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9551ee64-1932-4ded-8937-d95144eb4fdd",
+      "name": "Send Please Decide",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6000,
+        352
+      ],
+      "webhookId": "0cd1d410-bcba-4094-a411-39ec2b141f75"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jd-intake",
+        "options": {}
+      },
+      "id": "41a43a0d-85b8-413c-aa3f-888577a8d9bc",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        208,
+        144
+      ],
+      "webhookId": "059271a7-c00c-4659-9107-d314e24f8694"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            },
+            {}
+          ]
+        }
+      },
+      "id": "1afa7614-026f-4ee8-b658-e95d4a5118cb",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        -112
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If Is URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Is URL": {
+      "main": [
+        [
+          {
+            "node": "Fetch JD URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch JD URL": {
+      "main": [
+        [
+          {
+            "node": "Strip HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Strip HTML": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Set Packet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Packet": {
+      "main": [
+        [
+          {
+            "node": "Send Packet Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Packet Ready": {
+      "main": [
+        [
+          {
+            "node": "Log Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Approved": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain3": {
+      "main": [
+        [
+          {
+            "node": "Chunk Interview Prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain3",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chunk Interview Prep": {
+      "main": [
+        [
+          {
+            "node": "Send Interview Prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Log Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Rejected": {
+      "main": [
+        [
+          {
+            "node": "Send Reject Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Feedback": {
+      "main": [
+        [
+          {
+            "node": "Revise Bullets LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revise Bullets LLM": {
+      "main": [
+        [
+          {
+            "node": "Code Parse Revised",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Revise Bullets LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Parse Revised": {
+      "main": [
+        [
+          {
+            "node": "Format Revised Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Revised Message": {
+      "main": [
+        [
+          {
+            "node": "Send Revised Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Revised Message": {
+      "main": [
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Set Packet Revised",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Packet Revised": {
+      "main": [
+        [
+          {
+            "node": "Send Packet Ready Revised",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Packet Ready Revised": {
+      "main": [
+        [
+          {
+            "node": "Log Approved Revised",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Approved Revised": {
+      "main": [
+        [
+          {
+            "node": "LLM Interview2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Interview2": {
+      "main": [
+        [
+          {
+            "node": "Chunk Interview2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "LLM Interview2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chunk Interview2": {
+      "main": [
+        [
+          {
+            "node": "Send Interview2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "Log Rejected2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Please Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Rejected2": {
+      "main": [
+        [
+          {
+            "node": "Send Reject Confirmation2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}
